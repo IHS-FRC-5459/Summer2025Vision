@@ -1,0 +1,50 @@
+{
+  "field": {
+    "name": "Example Field",
+    "dimensions": {
+      "width_meters": 8.0,
+      "height_meters": 4.0
+    }
+  },
+  "tags": [
+    {
+      "id": 1,
+      "position": {
+        "x_meters": 1.0,
+        "y_meters": 1.0,
+        "z_meters": 0.5
+      },
+      "orientation": {
+        "roll_degrees": 0.0,
+        "pitch_degrees": 0.0,
+        "yaw_degrees": 90.0
+      }
+    },
+    {
+      "id": 2,
+      "position": {
+        "x_meters": 3.0,
+        "y_meters": 1.0,
+        "z_meters": 0.5
+      },
+      "orientation": {
+        "roll_degrees": 0.0,
+        "pitch_degrees": 0.0,
+        "yaw_degrees": 0.0
+      }
+    },
+    {
+      "id": 3,
+      "position": {
+        "x_meters": 5.0,
+        "y_meters": 3.0,
+        "z_meters": 0.5
+      },
+      "orientation": {
+        "roll_degrees": 0.0,
+        "pitch_degrees": 0.0,
+        "yaw_degrees": 180.0
+      }
+    }
+  ]
+}
