@@ -15,9 +15,9 @@ package frc.robot;
 
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.geometry.Transform3d;
-import java.io.File;
-import java.util.List;
-import java.util.Scanner;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
@@ -25,8 +25,6 @@ import org.littletonrobotics.junction.networktables.NT4Publisher;
 import org.littletonrobotics.junction.wpilog.WPILOGReader;
 import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 import org.photonvision.PhotonCamera;
-import org.photonvision.targeting.PhotonPipelineResult;
-import org.photonvision.targeting.PhotonTrackedTarget;
 
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
@@ -35,7 +33,7 @@ import org.photonvision.targeting.PhotonTrackedTarget;
  * project.
  */
 public class Robot extends LoggedRobot {
-  PhotonCamera Bob;
+  PhotonCamera Dan;
   PhotonCamera Phil;
   AprilTagFieldLayout kTagLayout;
 
@@ -82,7 +80,7 @@ public class Robot extends LoggedRobot {
 
     // Start AdvantageKit logger
     Logger.start();
-    Bob = new PhotonCamera("Bob");
+    Dan = new PhotonCamera("Dan");
     Phil = new PhotonCamera("Phil");
   }
 
@@ -93,69 +91,58 @@ public class Robot extends LoggedRobot {
   /** This function is called once when the robot is disabled. */
   @Override
   public void disabledInit() {
-
     // For localization, making a custom april tag field layout
     try {
-      String workingDirectory = System.getProperty("user.dir");
-      System.out.println("Working Dir: " + workingDirectory);
-      // File directory = new File("");
-      // // List all files and directories
-      // String[] filesAndFolders = directory.list();
-
-      // if (filesAndFolders != null) {
-      //   System.out.println("Files and folders in the current directory:");
-      //   for (String name : filesAndFolders) {
-      //     System.out.println(name);
-      //   }
-      // } else {
-      //   System.out.println("The directory is empty or an error occurred.");
-      // }
-      File file = new File("field.json");
-      // Use Scanner to read the file
-      Scanner scanner = new Scanner(file);
-      while (scanner.hasNextLine()) {
-        String line = scanner.nextLine();
-        System.out.println(line);
+      Path path = Paths.get("/home/lvuser/deploy/field.json");
+      if (Files.exists(path)) {
+        kTagLayout = new AprilTagFieldLayout(path);
+      } else {
+        System.out.println("File does not exist");
       }
-      scanner.close();
-      // Path path = Paths.get("/src/main/java/frc/robot/field.json");
-      // System.out.println(path);
-      // if (Files.exists(path)) {
-
-      //   kTagLayout = new AprilTagFieldLayout(path);
-      //   System.out.println("Field layout: " + kTagLayout);
-      //   System.out.println("Done with constructor");
-      // } else {
-      //   System.out.println("File does not exist");
-      // }
     } catch (Exception e) {
       System.out.println("Error: " + e);
-    } finally {
-      System.out.println("done");
     }
-    System.out.println("done2");
   }
 
   /** This function is called periodically when disabled. */
-  PhotonPipelineResult BobRes;
+  // PhotonPipelineResult BobRes;
 
-  PhotonPipelineResult PhilRes;
-  List<PhotonTrackedTarget> bobTargets;
-  List<PhotonTrackedTarget> philTargets;
+  // PhotonPipelineResult PhilRes;
+  // List<PhotonTrackedTarget> bobTargets;
+  // List<PhotonTrackedTarget> philTargets;
 
   @Override
   public void disabledPeriodic() {
-    BobRes = Bob.getLatestResult();
-    PhilRes = Phil.getLatestResult();
-    bobTargets = BobRes.getTargets();
-    PhotonTrackedTarget bTarget = PhilRes.getBestTarget();
-    philTargets = BobRes.getTargets();
-    PhotonTrackedTarget pTarget = PhilRes.getBestTarget();
-    if (bTarget != null) {
-      Transform3d pose = bTarget.getBestCameraToTarget();
 
-      Logger.recordOutput("Bob X", pose.getX());
+    var dResults = Dan.getAllUnreadResults();
+    Transform3d dFieldToCamera;
+    for (var result : dResults) {
+      var multiTagResult = result.getMultiTagResult();
+      if (multiTagResult.isPresent()) {
+        dFieldToCamera = multiTagResult.get().estimatedPose.best;
+      }
     }
+    var pResults = Phil.getAllUnreadResults();
+    Transform3d pFieldToCamera;
+    for (var result : pResults) {
+      var multiTagResult = result.getMultiTagResult();
+      if (multiTagResult.isPresent()) {
+        pFieldToCamera = multiTagResult.get().estimatedPose.best;
+      }
+    }
+
+    // BobRes = Bob.getLatestResult();
+    // PhilRes = Phil.getLatestResult();
+    // bobTargets = BobRes.getTargets();
+    // PhotonTrackedTarget bTarget = PhilRes.getBestTarget();
+    // philTargets = BobRes.getTargets();
+    // PhotonTrackedTarget pTarget = PhilRes.getBestTarget();
+    // if (bTarget != null) {
+    //   Transform3d pose = bTarget.getBestCameraToTarget();
+
+    //   Logger.recordOutput("Bob X", pose.getX());
+    // }
+
     // boolean targetVisible = false;
     // double targetYaw = 0.0;
     // var results = camera.getAllUnreadResults();
