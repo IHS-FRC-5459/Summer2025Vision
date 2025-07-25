@@ -13,18 +13,16 @@
 
 package frc.robot;
 
-import edu.wpi.first.apriltag.AprilTagFieldLayout;
+import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import edu.wpi.first.math.geometry.Translation3d;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.NT4Publisher;
 import org.littletonrobotics.junction.wpilog.WPILOGReader;
 import org.littletonrobotics.junction.wpilog.WPILOGWriter;
-import org.photonvision.PhotonCamera;
 
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
@@ -32,10 +30,15 @@ import org.photonvision.PhotonCamera;
  * the package after creating this project, you must also update the build.gradle file in the
  * project.
  */
+
+/*
+ *
+ */
 public class Robot extends LoggedRobot {
-  PhotonCamera Dan;
-  PhotonCamera Phil;
-  AprilTagFieldLayout kTagLayout;
+  private Vision danVision;
+  private Vision philVision;
+  private CameraConstants danConstants;
+  private CameraConstants philConstants;
 
   public Robot() {
     // Record metadata
@@ -80,28 +83,36 @@ public class Robot extends LoggedRobot {
 
     // Start AdvantageKit logger
     Logger.start();
-    Dan = new PhotonCamera("Dan");
-    Phil = new PhotonCamera("Phil");
+    danConstants = new CameraConstants();
+    danConstants.kCameraName = "Dan";
+    danConstants.kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
+    danConstants.kRobotToCam =
+        new Transform3d(new Translation3d(0.3048, 0.1524, 0), new Rotation3d(0, .35, 0));
+    danConstants.kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
+
+    philConstants = new CameraConstants();
+    philConstants.kCameraName = "Phil";
+    philConstants.kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
+    philConstants.kRobotToCam =
+        new Transform3d(new Translation3d(0.3048, 0, 0), new Rotation3d(0, .35, 0));
+    philConstants.kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
+
+    danVision = new Vision(danConstants);
+    philVision = new Vision(philConstants);
   }
 
   /** This function is called periodically during all modes. */
   @Override
-  public void robotPeriodic() {}
+  public void robotPeriodic() {
+    danVision.periodic();
+    philVision.periodic();
+  }
 
   /** This function is called once when the robot is disabled. */
   @Override
   public void disabledInit() {
     // For localization, making a custom april tag field layout
-    try {
-      Path path = Paths.get("/home/lvuser/deploy/field.json");
-      if (Files.exists(path)) {
-        kTagLayout = new AprilTagFieldLayout(path);
-      } else {
-        System.out.println("File does not exist");
-      }
-    } catch (Exception e) {
-      System.out.println("Error: " + e);
-    }
+
   }
 
   /** This function is called periodically when disabled. */
@@ -114,22 +125,22 @@ public class Robot extends LoggedRobot {
   @Override
   public void disabledPeriodic() {
 
-    var dResults = Dan.getAllUnreadResults();
-    Transform3d dFieldToCamera;
-    for (var result : dResults) {
-      var multiTagResult = result.getMultiTagResult();
-      if (multiTagResult.isPresent()) {
-        dFieldToCamera = multiTagResult.get().estimatedPose.best;
-      }
-    }
-    var pResults = Phil.getAllUnreadResults();
-    Transform3d pFieldToCamera;
-    for (var result : pResults) {
-      var multiTagResult = result.getMultiTagResult();
-      if (multiTagResult.isPresent()) {
-        pFieldToCamera = multiTagResult.get().estimatedPose.best;
-      }
-    }
+    // var dResults = Dan.getAllUnreadResults();
+    // Transform3d dFieldToCamera;
+    // for (var result : dResults) {
+    //   var multiTagResult = result.getMultiTagResult();
+    //   if (multiTagResult.isPresent()) {
+    //     dFieldToCamera = multiTagResult.get().estimatedPose.best;
+    //   }
+    // }
+    // var pResults = Phil.getAllUnreadResults();
+    // Transform3d pFieldToCamera;
+    // for (var result : pResults) {
+    //   var multiTagResult = result.getMultiTagResult();
+    //   if (multiTagResult.isPresent()) {
+    //     pFieldToCamera = multiTagResult.get().estimatedPose.best;
+    //   }
+    // }
 
     // BobRes = Bob.getLatestResult();
     // PhilRes = Phil.getLatestResult();

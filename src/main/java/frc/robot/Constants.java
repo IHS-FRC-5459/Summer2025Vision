@@ -23,6 +23,8 @@ import edu.wpi.first.wpilibj.RobotBase;
 public final class Constants {
   public static final Mode simMode = Mode.SIM;
   public static final Mode currentMode = RobotBase.isReal() ? Mode.REAL : simMode;
+  // Cam mounted facing forward, half a meter forward of center, half a meter up from center.
+  // new Translation3d(0.3048, 0.1524, 0), new Rotation3d(0, 20, 0)
 
   public static enum Mode {
     /** Running on a real robot. */
