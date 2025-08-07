@@ -8,15 +8,23 @@
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// MERCHANTleftLITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 package frc.robot;
 
+import com.ctre.phoenix6.hardware.Pigeon2;
 import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
+import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
+import edu.wpi.first.math.kinematics.SwerveModulePosition;
+import edu.wpi.first.wpilibj.Timer;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
@@ -35,10 +43,13 @@ import org.littletonrobotics.junction.wpilog.WPILOGWriter;
  *
  */
 public class Robot extends LoggedRobot {
-  private Vision abiVision;
-  private Vision philVision;
-  private CameraConstants abiConstants;
-  private CameraConstants philConstants;
+  private Vision leftVision;
+  private Vision rightVision;
+  private CameraConstants leftConstants;
+  private CameraConstants rightConstants;
+  private Pigeon2 pigeon;
+
+  private SwerveDrivePoseEstimator swerveEstimator;
 
   public Robot() {
     // Record metadata
@@ -83,33 +94,62 @@ public class Robot extends LoggedRobot {
 
     // Start AdvantageKit logger
     Logger.start();
-    abiConstants = new CameraConstants();
-    abiConstants.kCameraName = "Abi";
-    abiConstants.kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
-    abiConstants.kRobotToCam =
+    leftConstants = new CameraConstants();
+    leftConstants.kCameraName = "left";
+    leftConstants.kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
+    leftConstants.kRobotToCam =
         new Transform3d(
             new Translation3d(-0.0254, 0.0889, 0.03175),
             new Rotation3d(0, -0.34906585, -0.78539816));
-    abiConstants.kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
+    leftConstants.kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
 
-    philConstants = new CameraConstants();
-    philConstants.kCameraName = "Phil";
-    philConstants.kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
-    philConstants.kRobotToCam =
+    rightConstants = new CameraConstants();
+    rightConstants.kCameraName = "right";
+    rightConstants.kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
+    rightConstants.kRobotToCam =
         new Transform3d(
             new Translation3d(-0.01905, 0.3302, 0.03175),
             new Rotation3d(0, -0.52359878, 0.78539816));
-    philConstants.kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
+    rightConstants.kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
 
-    abiVision = new Vision(abiConstants);
-    philVision = new Vision(philConstants);
+    leftVision = new Vision(leftConstants);
+    rightVision = new Vision(rightConstants);
+
+    pigeon = new Pigeon2(1, "rio");
+    Translation2d[] moduleTranslations =
+        new Translation2d[] {
+          new Translation2d(0, 0),
+          new Translation2d(0, 0),
+          new Translation2d(0, 0),
+          new Translation2d(0, 0)
+        };
+    SwerveDriveKinematics kinematics =
+        new SwerveDriveKinematics(
+            new Translation2d(), new Translation2d(), new Translation2d(), new Translation2d());
+    Rotation2d rotation = new Rotation2d();
+    SwerveModulePosition[] lastModulePositions = // For delta tracking
+        new SwerveModulePosition[] {
+          new SwerveModulePosition(),
+          new SwerveModulePosition(),
+          new SwerveModulePosition(),
+          new SwerveModulePosition()
+        };
+    swerveEstimator =
+        new SwerveDrivePoseEstimator(kinematics, rotation, lastModulePositions, new Pose2d());
   }
 
   /** This function is called periodically during all modes. */
   @Override
   public void robotPeriodic() {
-    abiVision.periodic();
-    philVision.periodic();
+    leftVision.periodic();
+    rightVision.periodic();
+    swerveEstimator.addVisionMeasurement(
+        leftVision.getLatestLocation().toPose2d(), Timer.getFPGATimestamp());
+    swerveEstimator.addVisionMeasurement(
+        rightVision.getLatestLocation().toPose2d(), Timer.getFPGATimestamp());
+    SwerveModulePosition[] positions = new SwerveModulePosition[2];
+    swerveEstimator.update(pigeon.getRotation2d(), positions);
+    Logger.recordOutput("estimator", swerveEstimator.getEstimatedPosition());
   }
 
   /** This function is called once when the robot is disabled. */
@@ -122,14 +162,14 @@ public class Robot extends LoggedRobot {
   /** This function is called periodically when disabled. */
   // PhotonPipelineResult BobRes;
 
-  // PhotonPipelineResult PhilRes;
+  // PhotonPipelineResult rightRes;
   // List<PhotonTrackedTarget> bobTargets;
-  // List<PhotonTrackedTarget> philTargets;
+  // List<PhotonTrackedTarget> rightTargets;
 
   @Override
   public void disabledPeriodic() {
 
-    // var dResults = abi.getAllUnreadResults();
+    // var dResults = left.getAllUnreadResults();
     // Transform3d dFieldToCamera;
     // for (var result : dResults) {
     //   var multiTagResult = result.getMultiTagResult();
@@ -137,7 +177,7 @@ public class Robot extends LoggedRobot {
     //     dFieldToCamera = multiTagResult.get().estimatedPose.best;
     //   }
     // }
-    // var pResults = Phil.getAllUnreadResults();
+    // var pResults = right.getAllUnreadResults();
     // Transform3d pFieldToCamera;
     // for (var result : pResults) {
     //   var multiTagResult = result.getMultiTagResult();
@@ -147,11 +187,11 @@ public class Robot extends LoggedRobot {
     // }
 
     // BobRes = Bob.getLatestResult();
-    // PhilRes = Phil.getLatestResult();
+    // rightRes = right.getLatestResult();
     // bobTargets = BobRes.getTargets();
-    // PhotonTrackedTarget bTarget = PhilRes.getBestTarget();
-    // philTargets = BobRes.getTargets();
-    // PhotonTrackedTarget pTarget = PhilRes.getBestTarget();
+    // PhotonTrackedTarget bTarget = rightRes.getBestTarget();
+    // rightTargets = BobRes.getTargets();
+    // PhotonTrackedTarget pTarget = rightRes.getBestTarget();
     // if (bTarget != null) {
     //   Transform3d pose = bTarget.getBestCameraToTarget();
 

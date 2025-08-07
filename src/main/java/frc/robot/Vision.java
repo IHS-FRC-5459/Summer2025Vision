@@ -28,6 +28,7 @@ import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
@@ -51,7 +52,6 @@ public class Vision {
   private final PhotonCamera camera;
   private final PhotonPoseEstimator photonEstimator;
   private Matrix<N3, N1> curStdDevs;
-  // private final EstimateConsumer estConsumer;
 
   // Simulation
   private PhotonCameraSim cameraSim;
@@ -108,12 +108,17 @@ public class Vision {
     }
   }
 
+  public Pose3d getLatestLocation() {
+    return this.latestLocation;
+  }
+
+  private Pose3d latestLocation;
+
   public void periodic() {
     Optional<EstimatedRobotPose> visionEst = Optional.empty();
     for (var change : camera.getAllUnreadResults()) {
       visionEst = photonEstimator.update(change);
       updateEstimationStdDevs(visionEst, change.getTargets());
-
       if (Robot.isSimulation()) {
         visionEst.ifPresentOrElse(
             est ->
@@ -130,16 +135,18 @@ public class Vision {
             // Change our trust in the measurement based on the tags we can see
             var estStdDevs = getEstimationStdDevs();
 
-            Logger.recordOutput("Vision est", est.estimatedPose.toPose2d());
-            System.out.println(
-                constants.kCameraName
-                    + "    Vision est"
-                    + "   "
-                    + est.estimatedPose.toPose2d().getX()
-                    + "  "
-                    + est.estimatedPose.toPose2d().getY()
-                    + "    "
-                    + est.estimatedPose.getZ());
+            Logger.recordOutput(
+                "Vision_est_" + constants.kCameraName, est.estimatedPose.toPose2d());
+            this.latestLocation = est.estimatedPose;
+            // System.out.println(
+            //     constants.kCameraName
+            //         + "    Vision est"
+            //         + "   "
+            //         + est.estimatedPose.toPose2d().getX()
+            //         + "  "
+            //         + est.estimatedPose.toPose2d().getY()
+            //         + "    "
+            //         + est.estimatedPose.getZ());
             // estConsumer.accept(est.estimatedPose.toPose2d(), est.timestampSeconds, estStdDevs);
           });
     }
