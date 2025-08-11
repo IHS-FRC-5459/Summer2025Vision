@@ -24,7 +24,6 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
-import edu.wpi.first.wpilibj.Timer;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
@@ -112,9 +111,6 @@ public class Robot extends LoggedRobot {
             new Rotation3d(0, -0.52359878, 0.78539816));
     rightConstants.kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
 
-    leftVision = new Vision(leftConstants);
-    rightVision = new Vision(rightConstants);
-
     pigeon = new Pigeon2(1, "rio");
     Translation2d[] moduleTranslations =
         new Translation2d[] {
@@ -136,6 +132,8 @@ public class Robot extends LoggedRobot {
         };
     swerveEstimator =
         new SwerveDrivePoseEstimator(kinematics, rotation, lastModulePositions, new Pose2d());
+    leftVision = new Vision(leftConstants, swerveEstimator);
+    rightVision = new Vision(rightConstants, swerveEstimator);
   }
 
   /** This function is called periodically during all modes. */
@@ -143,13 +141,15 @@ public class Robot extends LoggedRobot {
   public void robotPeriodic() {
     leftVision.periodic();
     rightVision.periodic();
-    swerveEstimator.addVisionMeasurement(
-        leftVision.getLatestLocation().toPose2d(), Timer.getFPGATimestamp());
-    swerveEstimator.addVisionMeasurement(
-        rightVision.getLatestLocation().toPose2d(), Timer.getFPGATimestamp());
-    SwerveModulePosition[] positions = new SwerveModulePosition[2];
+    SwerveModulePosition[] positions = new SwerveModulePosition[4];
+    for (int i = 0; i < 4; i++) {
+      positions[i] = new SwerveModulePosition();
+    }
     swerveEstimator.update(pigeon.getRotation2d(), positions);
+    Logger.recordOutput("leftPose", leftVision.getLatestLocation().toPose2d());
+    Logger.recordOutput("rightPose", rightVision.getLatestLocation().toPose2d());
     Logger.recordOutput("estimator", swerveEstimator.getEstimatedPosition());
+    Logger.recordOutput("pigeon Rotation", pigeon.getRotation2d());
   }
 
   /** This function is called once when the robot is disabled. */

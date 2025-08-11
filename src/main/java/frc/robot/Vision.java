@@ -27,6 +27,7 @@ package frc.robot;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -38,7 +39,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
-import org.littletonrobotics.junction.Logger;
 import org.photonvision.EstimatedRobotPose;
 import org.photonvision.PhotonCamera;
 import org.photonvision.PhotonPoseEstimator;
@@ -64,9 +64,11 @@ public class Vision {
   private AprilTagFieldLayout kTagLayout;
 
   CameraConstants constants;
+  SwerveDrivePoseEstimator swerveEstimator;
 
-  public Vision(CameraConstants constants) {
+  public Vision(CameraConstants constants, SwerveDrivePoseEstimator swerveEstimator) {
     this.constants = constants;
+    this.swerveEstimator = swerveEstimator;
     try {
       Path path = Paths.get("/home/lvuser/deploy/field.json");
       if (Files.exists(path)) {
@@ -112,7 +114,12 @@ public class Vision {
     return this.latestLocation;
   }
 
+  public Matrix<N3, N1> getEstStdDevs() {
+    return estStdDevs;
+  }
+
   private Pose3d latestLocation;
+  private Matrix<N3, N1> estStdDevs;
 
   public void periodic() {
     Optional<EstimatedRobotPose> visionEst = Optional.empty();
@@ -133,11 +140,14 @@ public class Vision {
       visionEst.ifPresent(
           est -> {
             // Change our trust in the measurement based on the tags we can see
-            var estStdDevs = getEstimationStdDevs();
+            // var estStdDevs = getEstimationStdDevs();
 
-            Logger.recordOutput(
-                "Vision_est_" + constants.kCameraName, est.estimatedPose.toPose2d());
+            // Logger.recordOutput(
+            //    "Vision_est_" + constants.kCameraName, est.estimatedPose.toPose2d());
             this.latestLocation = est.estimatedPose;
+            this.estStdDevs = getEstimationStdDevs();
+            swerveEstimator.addVisionMeasurement(
+                est.estimatedPose.toPose2d(), est.timestampSeconds, estStdDevs);
             // System.out.println(
             //     constants.kCameraName
             //         + "    Vision est"
