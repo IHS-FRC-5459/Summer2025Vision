@@ -26,6 +26,7 @@ package frc.robot;
 
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.Matrix;
+import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
@@ -49,6 +50,7 @@ import org.photonvision.simulation.SimCameraProperties;
 import org.photonvision.simulation.VisionSystemSim;
 import org.photonvision.targeting.MultiTargetPNPResult;
 import org.photonvision.targeting.PhotonPipelineResult;
+import org.photonvision.targeting.PnpResult;
 
 public class Vision {
   private final PhotonCamera camera;
@@ -123,6 +125,7 @@ public class Vision {
     // Gets location
     List<PhotonPipelineResult> results = camera.getAllUnreadResults();
     boolean isGoodResult = true;
+    Matrix<N3, N1> stdDevs = VecBuilder.fill(0, 0, 0);
     for (PhotonPipelineResult result : results) {
       Optional<MultiTargetPNPResult> multiTagResult = result.getMultiTagResult();
       if (multiTagResult.isPresent()) {
@@ -133,6 +136,7 @@ public class Vision {
         Translation2d transl2d = fieldToCamera.getTranslation().toTranslation2d();
         Rotation2d rot2d = fieldToCamera.getRotation().toRotation2d();
         Pose2d pose = new Pose2d(transl2d, rot2d);
+        stdDevs = stdDevsFromMulti(multiTagResult.get());
         if (pose != null) {
           latestLocation = pose;
         }
@@ -140,8 +144,28 @@ public class Vision {
     }
     // Puts into swerve estimator
     if (isGoodResult && latestLocation != null) {
-      swerveEstimator.addVisionMeasurement(latestLocation, Timer.getFPGATimestamp());
+      swerveEstimator.addVisionMeasurement(latestLocation, Timer.getFPGATimestamp(), stdDevs);
     }
+  }
+  // Manually calculates estStdDevs
+  private Matrix<N3, N1> stdDevsFromMulti(MultiTargetPNPResult m) {
+    PnpResult pnp = m.estimatedPose;
+    Transform3d fieldToCamera = pnp.best;
+    double reprojErrPx = pnp.bestReprojErr; // pixels (0 = ideal)
+    double ambiguity = pnp.ambiguity; // 0 = unambiguous
+    int nTags = (m.fiducialIDsUsed == null) ? 1 : Math.max(1, m.fiducialIDsUsed.size());
+    double distance = fieldToCamera.getTranslation().getNorm(); // meters
+    // Tunable base values — start conservative
+    final double BASE_POS_STD = 0.5; // meters
+    final double BASE_ANG_STD = 0.30; // radians
+    // Scale factors (heuristic)
+    double reprojFactor = 1.0 + (reprojErrPx / 100.0);
+    double ambiguityFactor = 1.0 + (ambiguity * 2.0);
+    double distanceFactor = 1.0 + (distance * 0.05);
+    double tagCountFactor = 1.0 / Math.sqrt(nTags);
+    double posStd = BASE_POS_STD * reprojFactor * ambiguityFactor * distanceFactor * tagCountFactor;
+    double angStd = BASE_ANG_STD * reprojFactor * ambiguityFactor * (1.0 / Math.sqrt(nTags));
+    return VecBuilder.fill(posStd, posStd, angStd);
   }
   // ----- Simulation
 
