@@ -17,6 +17,7 @@ import com.ctre.phoenix6.hardware.Pigeon2;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
@@ -24,6 +25,8 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
+import edu.wpi.first.wpilibj.smartdashboard.Field2d;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
@@ -49,6 +52,8 @@ public class Robot extends LoggedRobot {
   private Pigeon2 pigeon;
 
   private SwerveDrivePoseEstimator swerveEstimator;
+
+  private Field2d m_field;
 
   public Robot() {
     // Record metadata
@@ -134,6 +139,11 @@ public class Robot extends LoggedRobot {
         new SwerveDrivePoseEstimator(kinematics, rotation, lastModulePositions, new Pose2d());
     leftVision = new Vision(leftConstants, swerveEstimator);
     rightVision = new Vision(rightConstants, swerveEstimator);
+
+    // Create and push Field2d to SmartDashboard.
+    m_field = new Field2d();
+    SmartDashboard.putData(m_field);
+    System.out.println("Added filed to dashboard");
   }
 
   /** This function is called periodically during all modes. */
@@ -146,10 +156,13 @@ public class Robot extends LoggedRobot {
       positions[i] = new SwerveModulePosition();
     }
     swerveEstimator.update(pigeon.getRotation2d(), positions);
-    Logger.recordOutput("leftPose", leftVision.getLatestLocation().toPose2d());
-    Logger.recordOutput("rightPose", rightVision.getLatestLocation().toPose2d());
+    Logger.recordOutput("leftLoc", leftVision.getLatestLocation());
+    Logger.recordOutput("rightLoc", rightVision.getLatestLocation());
     Logger.recordOutput("estimator", swerveEstimator.getEstimatedPosition());
     Logger.recordOutput("pigeon Rotation", pigeon.getRotation2d());
+
+    // For glass
+    m_field.setRobotPose(swerveEstimator.getEstimatedPosition());
   }
 
   /** This function is called once when the robot is disabled. */
@@ -159,66 +172,8 @@ public class Robot extends LoggedRobot {
 
   }
 
-  /** This function is called periodically when disabled. */
-  // PhotonPipelineResult BobRes;
-
-  // PhotonPipelineResult rightRes;
-  // List<PhotonTrackedTarget> bobTargets;
-  // List<PhotonTrackedTarget> rightTargets;
-
   @Override
-  public void disabledPeriodic() {
-
-    // var dResults = left.getAllUnreadResults();
-    // Transform3d dFieldToCamera;
-    // for (var result : dResults) {
-    //   var multiTagResult = result.getMultiTagResult();
-    //   if (multiTagResult.isPresent()) {
-    //     dFieldToCamera = multiTagResult.get().estimatedPose.best;
-    //   }
-    // }
-    // var pResults = right.getAllUnreadResults();
-    // Transform3d pFieldToCamera;
-    // for (var result : pResults) {
-    //   var multiTagResult = result.getMultiTagResult();
-    //   if (multiTagResult.isPresent()) {
-    //     pFieldToCamera = multiTagResult.get().estimatedPose.best;
-    //   }
-    // }
-
-    // BobRes = Bob.getLatestResult();
-    // rightRes = right.getLatestResult();
-    // bobTargets = BobRes.getTargets();
-    // PhotonTrackedTarget bTarget = rightRes.getBestTarget();
-    // rightTargets = BobRes.getTargets();
-    // PhotonTrackedTarget pTarget = rightRes.getBestTarget();
-    // if (bTarget != null) {
-    //   Transform3d pose = bTarget.getBestCameraToTarget();
-
-    //   Logger.recordOutput("Bob X", pose.getX());
-    // }
-
-    // boolean targetVisible = false;
-    // double targetYaw = 0.0;
-    // var results = camera.getAllUnreadResults();
-    // if (!results.isEmpty()) {
-    //   // Camera processed a new frame since last
-    //   // Get the last one in the list.
-    //   var result = results.get(results.size() - 1);
-    //   if (result.hasTargets()) {
-    //     // At least one AprilTag was seen by the camera
-    //     for (var target : result.getTargets()) {
-    //       if (target.getFiducialId() == 10) {
-    //         // Found Tag 7, record its information
-    //         targetYaw = target.getYaw();
-    //         Logger.recordOutput("targetYaw", targetYaw);
-    //         targetVisible = true;
-    //         Logger.recordOutput("targetVisible", targetVisible);
-    //       }
-    //     }
-    //   }
-    // }
-  }
+  public void disabledPeriodic() {}
 
   /** This autonomous runs the autonomous command selected by your {@link RobotContainer} class. */
   @Override
@@ -250,5 +205,12 @@ public class Robot extends LoggedRobot {
 
   /** This function is called periodically whilst in simulation. */
   @Override
-  public void simulationPeriodic() {}
+  public void simulationPeriodic() {
+    Translation2d transl2d = new Translation2d();
+    Rotation2d rot2d = new Rotation2d(40);
+    Pose2d testPose = new Pose2d(transl2d, rot2d);
+    Pose3d pose = leftVision.simulationPeriodic(testPose);
+    pose = rightVision.simulationPeriodic(testPose);
+    m_field.setRobotPose(pose.toPose2d());
+  }
 }
