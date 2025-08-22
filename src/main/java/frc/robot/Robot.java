@@ -14,10 +14,10 @@
 package frc.robot;
 
 import com.ctre.phoenix6.hardware.Pigeon2;
+import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
@@ -25,8 +25,12 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
+import edu.wpi.first.math.numbers.N1;
+import edu.wpi.first.math.numbers.N3;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import org.ejml.simple.SimpleMatrix;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
@@ -200,17 +204,109 @@ public class Robot extends LoggedRobot {
   public void testPeriodic() {}
 
   /** This function is called once when the robot is first started up. */
-  @Override
-  public void simulationInit() {}
+  SwerveDrivePoseEstimator simPoseEstimator;
 
+  @Override
+  public void simulationInit() {
+    SwerveDriveKinematics kinematics =
+        new SwerveDriveKinematics(
+            new Translation2d(), new Translation2d(), new Translation2d(), new Translation2d());
+    Rotation2d rotation = new Rotation2d();
+    SwerveModulePosition[] lastModulePositions = // For delta tracking
+        new SwerveModulePosition[] {
+          new SwerveModulePosition(),
+          new SwerveModulePosition(),
+          new SwerveModulePosition(),
+          new SwerveModulePosition()
+        };
+    simPoseEstimator =
+        new SwerveDrivePoseEstimator(kinematics, rotation, lastModulePositions, new Pose2d());
+  }
+
+  private Pose2d fusedPose;
+  private Matrix<N3, N1> fusedStdDevs;
+
+  public void fusePosesWithStd(Pose2d[] poses, Matrix<N3, N1>[] stdDevsArray) {
+    if (poses.length == 0 || poses.length != stdDevsArray.length) {
+      throw new IllegalArgumentException("Poses and stdDevs array must be same nonzero length");
+    }
+
+    // Build info matrices (inverse covariance) for each pose
+    SimpleMatrix[] infos = new SimpleMatrix[poses.length];
+    for (int i = 0; i < poses.length; i++) {
+      Matrix<N3, N3> cov = new Matrix<>(N3.instance, N3.instance);
+      Matrix<N3, N1> stdDevs = stdDevsArray[i];
+
+      for (int j = 0; j < 3; j++) {
+        double sigma = stdDevs.get(j, 0);
+        cov.set(j, j, sigma * sigma);
+      }
+
+      infos[i] =
+          new SimpleMatrix(
+                  new double[][] {
+                    {cov.get(0, 0), cov.get(0, 1), cov.get(0, 2)},
+                    {cov.get(1, 0), cov.get(1, 1), cov.get(1, 2)},
+                    {cov.get(2, 0), cov.get(2, 1), cov.get(2, 2)}
+                  })
+              .invert();
+    }
+
+    // Weighted sum of translations (x, y) and rotation (theta)
+    SimpleMatrix weightedVec = new SimpleMatrix(3, 1);
+    SimpleMatrix totalInfo = new SimpleMatrix(3, 3);
+    for (int i = 0; i < poses.length; i++) {
+      double x = poses[i].getX();
+      double y = poses[i].getY();
+      double theta = poses[i].getRotation().getRadians();
+      SimpleMatrix vec = new SimpleMatrix(3, 1, true, new double[] {x, y, theta});
+      weightedVec = weightedVec.plus(infos[i].mult(vec));
+      totalInfo = totalInfo.plus(infos[i]);
+    }
+
+    // Solve for fused translation + rotation
+    SimpleMatrix fusedVec = totalInfo.invert().mult(weightedVec);
+    fusedPose =
+        new Pose2d(
+            new Translation2d(fusedVec.get(0), fusedVec.get(1)), new Rotation2d(fusedVec.get(2)));
+
+    // Compute fused std devs
+    fusedStdDevs = new Matrix<>(N3.instance, N1.instance);
+    for (int i = 0; i < 3; i++) {
+      double variance = 1.0 / totalInfo.get(i, i);
+      fusedStdDevs.set(i, 0, Math.sqrt(variance));
+    }
+  }
   /** This function is called periodically whilst in simulation. */
   @Override
   public void simulationPeriodic() {
-    Translation2d transl2d = new Translation2d();
-    Rotation2d rot2d = new Rotation2d(40);
-    Pose2d testPose = new Pose2d(transl2d, rot2d);
-    Pose3d pose = leftVision.simulationPeriodic(testPose);
-    pose = rightVision.simulationPeriodic(testPose);
-    m_field.setRobotPose(pose.toPose2d());
+    Translation2d l_transl2d = new Translation2d(2, 4);
+    Rotation2d l_rot2d = new Rotation2d(40 * (Math.PI / 180));
+    Pose2d l_Pose = new Pose2d(l_transl2d, l_rot2d);
+    Matrix<N3, N1> l_stdDevs = VecBuilder.fill(0.3, 0.3, 0.3);
+
+    Translation2d r_transl2d = new Translation2d(3, 5);
+    Rotation2d r_rot2d = new Rotation2d(40 * (Math.PI / 180));
+    Pose2d r_Pose = new Pose2d(r_transl2d, r_rot2d);
+    Matrix<N3, N1> r_stdDevs = VecBuilder.fill(0.2, 0.2, 0.2);
+
+    Rotation2d gyroRotation = new Rotation2d(40 * (Math.PI / 180));
+    SwerveModulePosition[] positions = new SwerveModulePosition[4];
+    for (int i = 0; i < 4; i++) {
+      positions[i] = new SwerveModulePosition();
+    }
+
+    simPoseEstimator.update(gyroRotation, positions);
+    fusePosesWithStd(new Pose2d[] {l_Pose, r_Pose}, new Matrix[] {l_stdDevs, r_stdDevs});
+    simPoseEstimator.addVisionMeasurement(fusedPose, Timer.getFPGATimestamp(), fusedStdDevs);
+
+    Pose2d estPose = simPoseEstimator.getEstimatedPosition();
+
+    System.out.println("est_X" + estPose.getX());
+    System.out.println("est_Y" + estPose.getY());
+
+    System.out.println("est_deg" + estPose.getRotation().getDegrees());
+
+    m_field.setRobotPose(estPose);
   }
 }
