@@ -1,192 +1,99 @@
-/*
- * MIT License
- *
- * Copyright (c) PhotonVision
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
 
 package frc.robot;
 
-import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.Matrix;
-import edu.wpi.first.math.VecBuilder;
-import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
-import edu.wpi.first.wpilibj.Filesystem;
-import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.wpilibj.smartdashboard.Field2d;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.List;
-import java.util.Optional;
-import org.littletonrobotics.junction.Logger;
-import org.photonvision.PhotonCamera;
-import org.photonvision.simulation.PhotonCameraSim;
-import org.photonvision.simulation.SimCameraProperties;
-import org.photonvision.simulation.VisionSystemSim;
-import org.photonvision.targeting.MultiTargetPNPResult;
-import org.photonvision.targeting.PhotonPipelineResult;
-import org.photonvision.targeting.PnpResult;
+import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import org.ejml.simple.SimpleMatrix;
 
-public class Vision {
-  private final PhotonCamera camera;
+public class Vision extends SubsystemBase {
+  /** Creates a new Vision. */
+  private Camera[] cameras;
 
-  // Simulation
-  private PhotonCameraSim cameraSim;
-  private VisionSystemSim visionSim;
+  public Vision(Camera[] cameras) {
+    this.cameras = cameras;
+  }
 
-  /**
-   * @param estConsumer Lamba that will accept a pose estimate and pass it to your desired {@link
-   *     edu.wpi.first.math.estimator.SwerveDrivePoseEstimator}
-   */
-  private AprilTagFieldLayout kTagLayout;
+  private Pose2d fusedPose;
+  private Matrix<N3, N1> fusedStdDevs;
 
-  CameraConstants constants;
-  SwerveDrivePoseEstimator swerveEstimator;
-
-  public Vision(CameraConstants constants, SwerveDrivePoseEstimator swerveEstimator) {
-    this.constants = constants;
-    this.swerveEstimator = swerveEstimator;
-    if (!Robot.isSimulation()) {
-      try {
-        Path path = Paths.get("/home/lvuser/deploy/field.json");
-        if (Files.exists(path)) {
-          kTagLayout = new AprilTagFieldLayout(path);
-        } else {
-          System.out.println("File does not exist");
-        }
-      } catch (Exception e) {
-        System.out.println("Error: " + e);
-      }
+  public void addResults(Pose2d[] poses, Matrix<N3, N1>[] stdDevsArray) {
+    if (poses.length == 0 || poses.length != stdDevsArray.length) {
+      throw new IllegalArgumentException("Poses and stdDevs array must be same nonzero length");
     }
-    // this.estConsumer = estConsumer;
-    camera = new PhotonCamera(constants.kCameraName);
 
-    // ----- Simulation
-    if (Robot.isSimulation()) {
-      // Create the vision system simulation which handles cameras and targets on the field.
-      visionSim = new VisionSystemSim("main");
-      // Add all the AprilTags inside the tag layout as visible targets to this simulated field.
-      try {
-        Path path = Filesystem.getDeployDirectory().toPath().resolve("field.json");
-        kTagLayout = new AprilTagFieldLayout(path);
-        visionSim.addAprilTags(kTagLayout);
-      } catch (Exception e) {
-        System.out.println(e);
+    // Build info matrices (inverse covariance) for each pose
+    SimpleMatrix[] infos = new SimpleMatrix[poses.length];
+    for (int i = 0; i < poses.length; i++) {
+      Matrix<N3, N3> cov = new Matrix<>(N3.instance, N3.instance);
+      Matrix<N3, N1> stdDevs = stdDevsArray[i];
+
+      for (int j = 0; j < 3; j++) {
+        double sigma = stdDevs.get(j, 0);
+        cov.set(j, j, sigma * sigma);
       }
-      // Create simulated camera properties. These can be set to mimic your actual camera.
-      var cameraProp = new SimCameraProperties();
-      cameraProp.setCalibration(960, 720, Rotation2d.fromDegrees(90));
-      cameraProp.setCalibError(0.35, 0.10);
-      cameraProp.setFPS(15);
-      cameraProp.setAvgLatencyMs(50);
-      cameraProp.setLatencyStdDevMs(15);
-      // Create a PhotonCameraSim which will update the linked PhotonCamera's values with visible
-      // targets.
-      cameraSim = new PhotonCameraSim(camera, cameraProp);
-      // Add the simulated camera to view the targets on this simulated field.
-      visionSim.addCamera(cameraSim, constants.kRobotToCam);
 
-      cameraSim.enableDrawWireframe(true);
+      infos[i] =
+          new SimpleMatrix(
+                  new double[][] {
+                    {cov.get(0, 0), cov.get(0, 1), cov.get(0, 2)},
+                    {cov.get(1, 0), cov.get(1, 1), cov.get(1, 2)},
+                    {cov.get(2, 0), cov.get(2, 1), cov.get(2, 2)}
+                  })
+              .invert();
+    }
+
+    // Weighted sum of translations (x, y) and rotation (theta)
+    SimpleMatrix weightedVec = new SimpleMatrix(3, 1);
+    SimpleMatrix totalInfo = new SimpleMatrix(3, 3);
+    for (int i = 0; i < poses.length; i++) {
+      double x = poses[i].getX();
+      double y = poses[i].getY();
+      double theta = poses[i].getRotation().getRadians();
+      SimpleMatrix vec = new SimpleMatrix(3, 1, true, new double[] {x, y, theta});
+      weightedVec = weightedVec.plus(infos[i].mult(vec));
+      totalInfo = totalInfo.plus(infos[i]);
+    }
+
+    // Solve for fused translation + rotation
+    SimpleMatrix fusedVec = totalInfo.invert().mult(weightedVec);
+    fusedPose =
+        new Pose2d(
+            new Translation2d(fusedVec.get(0), fusedVec.get(1)), new Rotation2d(fusedVec.get(2)));
+
+    // Compute fused std devs
+    fusedStdDevs = new Matrix<>(N3.instance, N1.instance);
+    for (int i = 0; i < 3; i++) {
+      double variance = 1.0 / totalInfo.get(i, i);
+      fusedStdDevs.set(i, 0, Math.sqrt(variance));
     }
   }
 
-  private Pose2d latestLocation;
-
-  public Pose2d getLatestLocation() {
-    return latestLocation;
+  public Pose2d getPose() {
+    return fusedPose;
   }
 
+  public Matrix<N3, N1> getStdDevs() {
+    return fusedStdDevs;
+  }
+
+  @Override
   public void periodic() {
-    // Gets location
-    List<PhotonPipelineResult> results = camera.getAllUnreadResults();
-    boolean isGoodResult = true;
-    Matrix<N3, N1> stdDevs = VecBuilder.fill(0, 0, 0);
-    for (PhotonPipelineResult result : results) {
-      Optional<MultiTargetPNPResult> multiTagResult = result.getMultiTagResult();
-      if (multiTagResult.isPresent()) {
-        var estPose = multiTagResult.get().estimatedPose;
-        Transform3d fieldToCamera = estPose.best;
-        isGoodResult = estPose.ambiguity < 0.2;
-        Logger.recordOutput(constants.kCameraName + "ambiguity", estPose.ambiguity);
-        Translation2d transl2d = fieldToCamera.getTranslation().toTranslation2d();
-        Rotation2d rot2d = fieldToCamera.getRotation().toRotation2d();
-        Pose2d pose = new Pose2d(transl2d, rot2d);
-        stdDevs = stdDevsFromMulti(multiTagResult.get());
-        if (pose != null) {
-          latestLocation = pose;
-        }
-      }
+    Pose2d[] poses = new Pose2d[cameras.length];
+    Matrix[] stdDevs = new Matrix[cameras.length];
+    for (int i = 0; i < cameras.length; i++) {
+      Camera camera = cameras[i];
+      camera.periodic();
+      poses[i] = camera.getLatestLocation();
+      stdDevs[i] = camera.getLatestStdDevs();
     }
-    // Puts into swerve estimator
-    if (isGoodResult && latestLocation != null) {
-      swerveEstimator.addVisionMeasurement(latestLocation, Timer.getFPGATimestamp(), stdDevs);
-    }
-  }
-  // Manually calculates estStdDevs
-  private Matrix<N3, N1> stdDevsFromMulti(MultiTargetPNPResult m) {
-    PnpResult pnp = m.estimatedPose;
-    Transform3d fieldToCamera = pnp.best;
-    double reprojErrPx = pnp.bestReprojErr; // pixels (0 = ideal)
-    double ambiguity = pnp.ambiguity; // 0 = unambiguous
-    int nTags = (m.fiducialIDsUsed == null) ? 1 : Math.max(1, m.fiducialIDsUsed.size());
-    double distance = fieldToCamera.getTranslation().getNorm(); // meters
-    // Tunable base values — start conservative
-    final double BASE_POS_STD = 0.5; // meters
-    final double BASE_ANG_STD = 0.30; // radians
-    // Scale factors (heuristic)
-    double reprojFactor = 1.0 + (reprojErrPx / 100.0);
-    double ambiguityFactor = 1.0 + (ambiguity * 2.0);
-    double distanceFactor = 1.0 + (distance * 0.05);
-    double tagCountFactor = 1.0 / Math.sqrt(nTags);
-    double posStd = BASE_POS_STD * reprojFactor * ambiguityFactor * distanceFactor * tagCountFactor;
-    double angStd = BASE_ANG_STD * reprojFactor * ambiguityFactor * (1.0 / Math.sqrt(nTags));
-    return VecBuilder.fill(posStd, posStd, angStd);
-  }
-  // ----- Simulation
-
-  public Pose3d simulationPeriodic(Pose2d robotSimPose) {
-    visionSim.update(robotSimPose);
-    return visionSim.getRobotPose();
-  }
-
-  /** Reset pose history of the robot in the vision system simulation. */
-  public void resetSimPose(Pose2d pose) {
-    if (Robot.isSimulation()) visionSim.resetRobotPose(pose);
-  }
-
-  /** A Field2d for visualizing our robot and objects on the field. */
-  public Field2d getSimDebugField() {
-    if (!Robot.isSimulation()) return null;
-    return visionSim.getDebugField();
-  }
-
-  @FunctionalInterface
-  public static interface EstimateConsumer {
-    public void accept(Pose2d pose, double timestamp, Matrix<N3, N1> estimationStdDevs);
+    // This method will be called once per scheduler run
   }
 }
