@@ -91,8 +91,8 @@ public class Vision extends SubsystemBase {
     for (int i = 0; i < cameras.length; i++) {
       Camera camera = cameras[i];
       camera.periodic();
-      poses[i] = camera.getLatestLocation();
-      stdDevs[i] = camera.getLatestStdDevs();
+      poses[i] = camera.getLatestLocation().toPose2d();
+      stdDevs[i] = camera.getEstStdDevs();
     }
     // This method will be called once per scheduler run
   }
