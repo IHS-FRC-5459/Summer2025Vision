@@ -24,7 +24,6 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
-import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import org.littletonrobotics.junction.LogFileUtil;
@@ -140,7 +139,8 @@ public class Robot extends LoggedRobot {
         new SwerveDrivePoseEstimator(kinematics, rotation, lastModulePositions, new Pose2d());
     leftCamera = new Camera(leftConstants);
     rightCamera = new Camera(rightConstants);
-
+    Camera[] cameras = {leftCamera, rightCamera};
+    vision = new Vision(cameras);
     // Create and push Field2d to SmartDashboard.
     m_field = new Field2d();
     SmartDashboard.putData(m_field);
@@ -156,8 +156,9 @@ public class Robot extends LoggedRobot {
       positions[i] = new SwerveModulePosition();
     }
     swerveEstimator.update(pigeon.getRotation2d(), positions);
-    swerveEstimator.addVisionMeasurement(
-        vision.getPose(), Timer.getFPGATimestamp(), vision.getStdDevs());
+
+    // swerveEstimator.addVisionMeasurement(
+    //   vision.getPose(), Timer.getFPGATimestamp(), vision.getStdDevs());
     Logger.recordOutput("leftLoc", leftCamera.getLatestLocation());
     Logger.recordOutput("rightLoc", rightCamera.getLatestLocation());
     Logger.recordOutput("estimator", swerveEstimator.getEstimatedPosition());

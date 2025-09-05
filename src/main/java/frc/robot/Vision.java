@@ -4,25 +4,43 @@
 
 package frc.robot;
 
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.Matrix;
+import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import org.ejml.simple.SimpleMatrix;
 
 public class Vision extends SubsystemBase {
   /** Creates a new Vision. */
   private Camera[] cameras;
 
+  private AprilTagFieldLayout kTagLayout;
+
   public Vision(Camera[] cameras) {
     this.cameras = cameras;
+    try {
+      Path path = Paths.get("/home/lvuser/deploy/field.json");
+      if (Files.exists(path)) {
+        kTagLayout = new AprilTagFieldLayout(path);
+      } else {
+        System.out.println("File does not exist");
+      }
+    } catch (Exception e) {
+      System.out.println("Error: " + e);
+    }
   }
 
   private Pose2d fusedPose;
-  private Matrix<N3, N1> fusedStdDevs;
+  private Matrix<N3, N1> fusedStdDevs = VecBuilder.fill(0.2, 0.2, 0.2);
 
   public void addResults(Pose2d[] poses, Matrix<N3, N1>[] stdDevsArray) {
     if (poses.length == 0 || poses.length != stdDevsArray.length) {
@@ -86,14 +104,35 @@ public class Vision extends SubsystemBase {
 
   @Override
   public void periodic() {
-    Pose2d[] poses = new Pose2d[cameras.length];
-    Matrix[] stdDevs = new Matrix[cameras.length];
-    for (int i = 0; i < cameras.length; i++) {
-      Camera camera = cameras[i];
-      camera.periodic();
-      poses[i] = camera.getLatestLocation().toPose2d();
-      stdDevs[i] = camera.getEstStdDevs();
+    // Pose2d[] poses = new Pose2d[cameras.length];
+    // Matrix[] stdDevs = new Matrix[cameras.length];
+    // for (int i = 0; i < cameras.length; i++) {
+    //   Camera camera = cameras[i];
+    //   camera.periodic();
+    //   poses[i] = camera.getLatestLocation().toPose2d();
+    //   stdDevs[i] = camera.getEstStdDevs();
+    // }
+    ArrayList<Pose2d> listPoses = new ArrayList<Pose2d>();
+    ArrayList<Matrix<N3, N1>> listStdDevs = new ArrayList<Matrix<N3, N1>>();
+    for (Camera camera : cameras) {
+      if (camera.canSeeTargets()) {
+        listPoses.add(camera.getLatestLocation().toPose2d());
+        listStdDevs.add(camera.getEstStdDevs());
+      }
     }
+    Matrix<N3, N1>[] stdDevs = new Matrix[listStdDevs.size()];
+    for (int i = 0; i < listStdDevs.size(); i++) {
+      stdDevs[i] = listStdDevs.get(i);
+    }
+    ;
+    Pose2d[] poses = new Pose2d[listPoses.size()];
+    for (int i = 0; i < listPoses.size(); i++) {
+      poses[i] = listPoses.get(i);
+    }
+    // Matrix<N3, N1>[] stdDevs =
+    //    new Matrix[] {VecBuilder.fill(0.2, 0.2, 0.2), VecBuilder.fill(0.2, 0.2, 0.2)};
+    //NEED TO UNCOMMENT NEXT LINE
+    // addResults(poses, stdDevs);
     // This method will be called once per scheduler run
   }
 }
