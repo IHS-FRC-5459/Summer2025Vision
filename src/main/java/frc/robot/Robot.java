@@ -104,8 +104,8 @@ public class Robot extends LoggedRobot {
     leftConstants.kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
     leftConstants.kRobotToCam =
         new Transform3d(
-            new Translation3d(-0.0254, 0.0889, 0.03175),
-            new Rotation3d(0, -0.34906585, -0.78539816));
+            new Translation3d(-0.034925, 0.561975, 0.0619125),
+            new Rotation3d(0, Math.toRadians(30), Math.toRadians(-45)));
     leftConstants.kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
 
     rightConstants = new CameraConstants();
@@ -113,8 +113,8 @@ public class Robot extends LoggedRobot {
     rightConstants.kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
     rightConstants.kRobotToCam =
         new Transform3d(
-            new Translation3d(-0.01905, 0.3302, 0.03175),
-            new Rotation3d(0, -0.52359878, 0.78539816));
+            new Translation3d(-0.034925, 0.04445, 0.0619125),
+            new Rotation3d(0, Math.toRadians(30), Math.toRadians(45)));
     rightConstants.kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
 
     pigeon = new Pigeon2(1, "rio");
@@ -140,6 +140,8 @@ public class Robot extends LoggedRobot {
         new SwerveDrivePoseEstimator(kinematics, rotation, lastModulePositions, new Pose2d());
     leftCamera = new Camera(leftConstants);
     rightCamera = new Camera(rightConstants);
+    Camera[] cameras = {leftCamera, rightCamera};
+    vision = new Vision(cameras);
 
     // Create and push Field2d to SmartDashboard.
     m_field = new Field2d();

@@ -5,6 +5,7 @@
 package frc.robot;
 
 import edu.wpi.first.math.Matrix;
+import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
@@ -21,8 +22,8 @@ public class Vision extends SubsystemBase {
     this.cameras = cameras;
   }
 
-  private Pose2d fusedPose;
-  private Matrix<N3, N1> fusedStdDevs;
+  private Pose2d fusedPose = new Pose2d();
+  private Matrix<N3, N1> fusedStdDevs = VecBuilder.fill(0.7, 0.5, 0.2);
 
   public void addResults(Pose2d[] poses, Matrix<N3, N1>[] stdDevsArray) {
     if (poses.length == 0 || poses.length != stdDevsArray.length) {
@@ -33,6 +34,7 @@ public class Vision extends SubsystemBase {
     SimpleMatrix[] infos = new SimpleMatrix[poses.length];
     for (int i = 0; i < poses.length; i++) {
       Matrix<N3, N3> cov = new Matrix<>(N3.instance, N3.instance);
+      // System.out.println("StdDevs 0: " + stdDevsArray[0]);
       Matrix<N3, N1> stdDevs = stdDevsArray[i];
 
       for (int j = 0; j < 3; j++) {
@@ -91,8 +93,28 @@ public class Vision extends SubsystemBase {
     for (int i = 0; i < cameras.length; i++) {
       Camera camera = cameras[i];
       camera.periodic();
-      poses[i] = camera.getLatestLocation().toPose2d();
-      stdDevs[i] = camera.getEstStdDevs();
+      if (camera.getLatestLocation() != null && camera.getEstStdDevs() != null) {
+        poses[i] = camera.getLatestLocation().toPose2d();
+        stdDevs[i] = camera.getEstStdDevs();
+      }
+    }
+    boolean skip = false;
+    for (Pose2d pose : poses) {
+      if (!skip) {
+        skip = pose == null;
+      } else {
+        break;
+      }
+    }
+    for (Matrix matrix : stdDevs) {
+      if (!skip) {
+        skip = matrix == null;
+      } else {
+        break;
+      }
+    }
+    if (!skip) {
+      addResults(poses, stdDevs);
     }
     // This method will be called once per scheduler run
   }

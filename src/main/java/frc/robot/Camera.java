@@ -71,7 +71,7 @@ public class Camera {
     // this.swerveEstimator = swerveEstimator;
     if (!Robot.isSimulation()) {
       try {
-        Path path = Paths.get("/home/lvuser/deploy/field.json");
+        Path path = Paths.get("/home/lvuser/deploy/woodField.json");
         if (Files.exists(path)) {
           kTagLayout = new AprilTagFieldLayout(path);
         } else {
@@ -117,10 +117,16 @@ public class Camera {
   }
 
   public Pose3d getLatestLocation() {
+    if (latestLocation == null) {
+      return null;
+    }
     return this.latestLocation;
   }
 
   public Matrix<N3, N1> getEstStdDevs() {
+    if (estStdDevs == null) {
+      return null;
+    }
     return estStdDevs;
   }
 
@@ -155,24 +161,14 @@ public class Camera {
     for (var change : camera.getAllUnreadResults()) {
       visionEst = photonEstimator.update(change);
       updateEstimationStdDevs(visionEst, change.getTargets());
-      if (Robot.isSimulation()) {
-        visionEst.ifPresentOrElse(
-            est ->
-                getSimDebugField()
-                    .getObject("VisionEstimation")
-                    .setPose(est.estimatedPose.toPose2d()),
-            () -> {
-              getSimDebugField().getObject("VisionEstimation").setPoses();
-            });
-      }
-
-      visionEst.ifPresent(
-          est -> {
-            // Change our trust in the measurement based on the tags we can see
-            this.latestLocation = est.estimatedPose;
-            this.estStdDevs = getEstimationStdDevs();
-          });
     }
+
+    visionEst.ifPresent(
+        est -> {
+          // Change our trust in the measurement based on the tags we can see
+          this.latestLocation = est.estimatedPose;
+          this.estStdDevs = getEstimationStdDevs();
+        });
   }
   // Manually calculates estStdDevs
   // private Matrix<N3, N1> stdDevsFromMulti(MultiTargetPNPResult m) {
