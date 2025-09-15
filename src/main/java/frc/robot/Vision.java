@@ -4,6 +4,7 @@
 
 package frc.robot;
 
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -12,14 +13,29 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.ejml.simple.SimpleMatrix;
 
 public class Vision extends SubsystemBase {
   /** Creates a new Vision. */
   private Camera[] cameras;
 
+  private AprilTagFieldLayout kTagLayout;
+
   public Vision(Camera[] cameras) {
     this.cameras = cameras;
+    try {
+      Path path = Paths.get("/home/lvuser/deploy/field.json");
+      if (Files.exists(path)) {
+        kTagLayout = new AprilTagFieldLayout(path);
+      } else {
+        System.out.println("File does not exist");
+      }
+    } catch (Exception e) {
+      System.out.println("Error: " + e);
+    }
   }
 
   private Pose2d fusedPose = new Pose2d();
@@ -29,7 +45,7 @@ public class Vision extends SubsystemBase {
     if (poses.length == 0 || poses.length != stdDevsArray.length) {
       throw new IllegalArgumentException("Poses and stdDevs array must be same nonzero length");
     }
-
+    // System.out.println(stdDevsArray[0]);
     // Build info matrices (inverse covariance) for each pose
     SimpleMatrix[] infos = new SimpleMatrix[poses.length];
     for (int i = 0; i < poses.length; i++) {

@@ -158,6 +158,7 @@ public class Robot extends LoggedRobot {
       positions[i] = new SwerveModulePosition();
     }
     swerveEstimator.update(pigeon.getRotation2d(), positions);
+
     swerveEstimator.addVisionMeasurement(
         vision.getPose(), Timer.getFPGATimestamp(), vision.getStdDevs());
     Logger.recordOutput("leftLoc", leftCamera.getLatestLocation());

@@ -30,6 +30,7 @@ import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.wpilibj.Filesystem;
@@ -39,6 +40,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
+import org.littletonrobotics.junction.Logger;
 import org.photonvision.EstimatedRobotPose;
 import org.photonvision.PhotonCamera;
 import org.photonvision.PhotonPoseEstimator;
@@ -127,13 +129,24 @@ public class Camera {
     if (estStdDevs == null) {
       return null;
     }
+    Logger.recordOutput(constants.kCameraName + "stdDevs", estStdDevs.getData());
     return estStdDevs;
   }
 
-  private Pose3d latestLocation;
-  private Matrix<N3, N1> estStdDevs;
+  // private boolean targetsVisible;
+
+  // public boolean canSeeTargets() {
+  //   return targetsVisible;
+  // }
+  // d_ = default
+  Translation2d d_transl2d = new Translation2d(2, 4);
+  Rotation2d d_rot2d = new Rotation2d(40 * (Math.PI / 180));
+  Pose2d d_pose = new Pose2d(d_transl2d, d_rot2d);
+  private Pose3d latestLocation = new Pose3d(d_pose);
+  private Matrix<N3, N1> estStdDevs = VecBuilder.fill(0.3, 0.3, 0.3);
 
   public void periodic() {
+    // Logger.recordOutput("seesTargets" + constants.kCameraName, canSeeTargets());
     // MANUAL, NO MULTITAG
     /*
     List<PhotonPipelineResult> results = camera.getAllUnreadResults();
@@ -162,7 +175,6 @@ public class Camera {
       visionEst = photonEstimator.update(change);
       updateEstimationStdDevs(visionEst, change.getTargets());
     }
-
     visionEst.ifPresent(
         est -> {
           // Change our trust in the measurement based on the tags we can see
